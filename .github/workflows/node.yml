@@ -14,6 +14,7 @@ on:
         type: string
         default: ""
       node-version-file:
+        description: "Arquivo contendo versão do Node (resolvido a partir da raiz do repo, não de working-directory)"
         type: string
         default: ""
       bun-version:
@@ -30,33 +31,60 @@ permissions:
 jobs:
   node:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Validar versões (npm)
+        if: inputs.package-manager == 'npm'
+        run: |
+          if [ -z "$NODE_VERSION" ] && [ -z "$NODE_VERSION_FILE" ]; then
+            echo "::error::package-manager=npm requer node-version ou node-version-file"
+            exit 1
+          fi
+        env:
+          NODE_VERSION: ${{ inputs.node-version }}
+          NODE_VERSION_FILE: ${{ inputs.node-version-file }}
+      - name: Validar versões (bun)
+        if: inputs.package-manager == 'bun'
+        run: |
+          if [ -z "$BUN_VERSION" ]; then
+            echo "::error::package-manager=bun requer bun-version"
+            exit 1
+          fi
+        env:
+          BUN_VERSION: ${{ inputs.bun-version }}
       - if: inputs.package-manager == 'npm'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
           node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
       - if: inputs.package-manager == 'bun'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun-version }}
       - name: Instalar dependências
+        env:
+          PKG_MGR: ${{ inputs.package-manager }}
         run: |
-          case "${{ inputs.package-manager }}" in
+          case "$PKG_MGR" in
             npm) npm ci ;;
             bun) bun install --frozen-lockfile ;;
-            *) echo "package-manager inválido: ${{ inputs.package-manager }}"; exit 1 ;;
+            *) echo "::error::package-manager inválido: $PKG_MGR"; exit 1 ;;
           esac
       - name: Scripts
         env:
           SCRIPTS: ${{ inputs.scripts }}
+          PKG_MGR: ${{ inputs.package-manager }}
         run: |
           for s in $SCRIPTS; do
             echo "::group::$s"
-            if [ "${{ inputs.package-manager }}" = bun ]; then bun run "$s"; else npm run "$s"; fi
+            if [ "$PKG_MGR" = bun ]; then bun run "$s"; else npm run "$s"; fi
             echo "::endgroup::"
           done

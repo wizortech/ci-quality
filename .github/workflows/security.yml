@@ -17,33 +17,94 @@ permissions:
 jobs:
   gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: gitleaks (diretório, sem histórico)
         run: |
           docker run --rm -v "$PWD:/repo:ro" \
             ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
-            dir "/repo/${{ inputs.working-directory }}" --redact --no-banner --exit-code 1
+            dir "/repo/$WORKING_DIR" --redact --no-banner --exit-code 1
+        env:
+          WORKING_DIR: ${{ inputs.working-directory }}
+      - name: Resumo (gitleaks sem achados)
+        if: success()
+        run: |
+          echo "gitleaks: nenhum secret detectado" >> "$GITHUB_STEP_SUMMARY"
 
   semgrep:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ !inputs.enforce }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Semgrep CE
+        id: scan
+        continue-on-error: true
         run: |
-          docker run --rm -v "$PWD:/src" -w "/src/${{ inputs.working-directory }}" \
+          set -o pipefail
+          docker run --rm -v "$PWD:/src" -w "/src/$WORKING_DIR" \
             semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b \
-            semgrep scan --config p/default --config p/secrets --error --metrics=off .
+            semgrep scan --config p/default --config p/secrets --error --metrics=off . | tee "$RUNNER_TEMP/semgrep.txt"
+        env:
+          WORKING_DIR: ${{ inputs.working-directory }}
+      - name: Reportar Semgrep
+        if: steps.scan.outcome == 'failure'
+        run: |
+          {
+            echo "## Semgrep encontrou problemas"
+            echo '```'
+            tail -n 200 "$RUNNER_TEMP/semgrep.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ENFORCE" = "true" ]; then
+            echo "::error::Semgrep detectou problemas (enforce=true)"
+          else
+            echo "::warning::Semgrep detectou problemas (modo relatório apenas)"
+          fi
+        env:
+          ENFORCE: ${{ inputs.enforce }}
+      - name: Bloquear se enforce
+        if: steps.scan.outcome == 'failure' && inputs.enforce
+        run: exit 1
 
   trivy:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ !inputs.enforce }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Trivy fs (dependências, configs, segredos)
+        id: scan
+        continue-on-error: true
         run: |
+          set -o pipefail
           docker run --rm -v "$PWD:/src:ro" \
             aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
             fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress \
-            "/src/${{ inputs.working-directory }}"
+            "/src/$WORKING_DIR" | tee "$RUNNER_TEMP/trivy.txt"
+        env:
+          WORKING_DIR: ${{ inputs.working-directory }}
+      - name: Reportar Trivy
+        if: steps.scan.outcome == 'failure'
+        run: |
+          {
+            echo "## Trivy encontrou problemas"
+            echo '```'
+            tail -n 200 "$RUNNER_TEMP/trivy.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ENFORCE" = "true" ]; then
+            echo "::error::Trivy detectou problemas (enforce=true)"
+          else
+            echo "::warning::Trivy detectou problemas (modo relatório apenas)"
+          fi
+        env:
+          ENFORCE: ${{ inputs.enforce }}
+      - name: Bloquear se enforce
+        if: steps.scan.outcome == 'failure' && inputs.enforce
+        run: exit 1

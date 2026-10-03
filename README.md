@@ -68,12 +68,12 @@ jobs:
 
 ## Pinned Action and Image Versions
 
-All actions and container images are pinned by SHA256 digest for reproducibility and security:
+All actions and container images are pinned for reproducibility and security:
 
-- **Actions** are referenced by exact commit SHA with version tags in comments
-- **Container images** are referenced by tag and full SHA256 digest (e.g., `image:tag@sha256:...`)
+- **GitHub Actions** are referenced by exact commit SHA with version tags in comments (e.g., `actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3`)
+- **Container images** are referenced by image tag and full SHA256 digest (e.g., `image:tag@sha256:...`)
 
-This ensures that builds are deterministic and prevents supply-chain compromises from unexpected image/action updates.
+This ensures that builds are deterministic and prevents supply-chain compromises from unexpected action/image updates.
 
 ## License
 
