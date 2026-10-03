@@ -1,0 +1,62 @@
+name: Node
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        default: "."
+      package-manager:
+        description: "npm ou bun"
+        type: string
+        default: npm
+      node-version:
+        type: string
+        default: ""
+      node-version-file:
+        type: string
+        default: ""
+      bun-version:
+        type: string
+        default: ""
+      scripts:
+        description: "Scripts do package.json, em ordem, separados por espaço (ex.: 'lint typecheck test')"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: inputs.package-manager == 'npm'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          node-version-file: ${{ inputs.node-version-file }}
+      - if: inputs.package-manager == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ inputs.bun-version }}
+      - name: Instalar dependências
+        run: |
+          case "${{ inputs.package-manager }}" in
+            npm) npm ci ;;
+            bun) bun install --frozen-lockfile ;;
+            *) echo "package-manager inválido: ${{ inputs.package-manager }}"; exit 1 ;;
+          esac
+      - name: Scripts
+        env:
+          SCRIPTS: ${{ inputs.scripts }}
+        run: |
+          for s in $SCRIPTS; do
+            echo "::group::$s"
+            if [ "${{ inputs.package-manager }}" = bun ]; then bun run "$s"; else npm run "$s"; fi
+            echo "::endgroup::"
+          done
