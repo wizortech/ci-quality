@@ -24,8 +24,8 @@ Installs dependencies and runs scripts for Node.js projects (npm or bun).
 **Inputs:**
 - `working-directory` (string, default: `.`) — Directory containing package.json
 - `package-manager` (string, default: `npm`) — Package manager to use: `npm` or `bun`
-- `node-version` (string, default: `""`) — Node.js version to install (if using npm)
-- `node-version-file` (string, default: `""`) — File containing Node.js version (if using npm)
+- `node-version` (string, default: `""`) — Node.js version to install (required with npm; optional with bun, where it installs Node for tools like Vitest and Prisma)
+- `node-version-file` (string, default: `""`) — File containing Node.js version (required with npm unless node-version is set; optional with bun)
 - `bun-version` (string, default: `""`) — Bun version to install (if using bun)
 - `scripts` (string, **required**) — Space-separated list of npm/bun scripts to run (e.g., `lint typecheck test`)
 
