@@ -10,13 +10,17 @@ on:
         description: "Se false, Semgrep e Trivy só reportam (gitleaks sempre bloqueia)"
         type: boolean
         default: true
+      runner:
+        description: "Label do runner (padrão: arm64-sp)"
+        type: string
+        default: arm64-sp
 
 permissions:
   contents: read
 
 jobs:
   gitleaks:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -35,7 +39,7 @@ jobs:
           echo "gitleaks: nenhum secret detectado" >> "$GITHUB_STEP_SUMMARY"
 
   semgrep:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -72,7 +76,7 @@ jobs:
         run: exit 1
 
   trivy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

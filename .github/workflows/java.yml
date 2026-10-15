@@ -12,13 +12,17 @@ on:
       command:
         type: string
         default: "./mvnw -B verify"
+      runner:
+        description: "Label do runner (padrão: arm64-sp)"
+        type: string
+        default: arm64-sp
 
 permissions:
   contents: read
 
 jobs:
   java:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     defaults:
       run:

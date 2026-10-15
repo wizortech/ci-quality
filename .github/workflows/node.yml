@@ -24,13 +24,17 @@ on:
         description: "Scripts do package.json, em ordem, separados por espaço (ex.: 'lint typecheck test')"
         type: string
         required: true
+      runner:
+        description: "Label do runner (padrão: arm64-sp)"
+        type: string
+        default: arm64-sp
 
 permissions:
   contents: read
 
 jobs:
   node:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     defaults:
       run:
