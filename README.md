@@ -33,9 +33,21 @@ Only the gitleaks job of `security.yml`, for deploy pipelines (Semgrep and Trivy
 Sends a failure message (repository, workflow and run link) to the platform Telegram bot.
 Meant for nightly workflows, in a job with `needs: [...]` and `if: failure()`.
 
-**Secrets:** `DOPPLER_TOKEN` (required) — read-only service token for Doppler `ci/prd`, which must
-hold `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Organization secrets do not reach private
-repositories on GitHub Free, so each repository has its own.
+**Secrets:** none. It reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` from Doppler `platform/ci`
+with the read-only service token in the self-hosted runners' environment (`DOPPLER_TOKEN` in each
+runner's `.env`). Organization secrets do not reach private repositories on GitHub Free, so the
+token lives on the runner instead of in 11 repositories. `DOPPLER_TOKEN` is still accepted as an
+optional secret during the transition.
+
+## Actions
+
+### doppler-ci
+
+`uses: wizortech/ci-quality/.github/actions/doppler-ci@v1.2.0` (with `id: doppler`) reads Doppler
+`platform/ci` with the runner's `DOPPLER_TOKEN`, masks every value and exposes each key as an
+output (`steps.doppler.outputs.CLOUDFLARE_API_TOKEN`, `HOSTINGER_*`, `GOOGLE_MAPS_API_KEY`,
+`TELEGRAM_*`). Only works on the org's self-hosted runners. Optional input `token` overrides the
+runner token.
 
 ### node.yml
 

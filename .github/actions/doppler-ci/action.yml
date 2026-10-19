@@ -1,0 +1,68 @@
+name: Segredos de CI (Doppler platform/ci)
+description: >-
+  Lê o config platform/ci do Doppler com o token de serviço read-only que fica no
+  ambiente dos runners self-hosted da org (variável DOPPLER_TOKEN no .env do runner).
+  Os valores são mascarados no log e expostos como outputs com o mesmo nome da chave.
+
+inputs:
+  token:
+    description: >-
+      Token alternativo (ex.: secrets.DOPPLER_TOKEN). Só para transição; sem ele, usa o
+      DOPPLER_TOKEN do ambiente do runner.
+    required: false
+    default: ""
+
+outputs:
+  CLOUDFLARE_ACCOUNT_ID:
+    value: ${{ steps.fetch.outputs.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_API_TOKEN:
+    value: ${{ steps.fetch.outputs.CLOUDFLARE_API_TOKEN }}
+  GOOGLE_MAPS_API_KEY:
+    value: ${{ steps.fetch.outputs.GOOGLE_MAPS_API_KEY }}
+  HOSTINGER_HOST:
+    value: ${{ steps.fetch.outputs.HOSTINGER_HOST }}
+  HOSTINGER_KNOWN_HOSTS:
+    value: ${{ steps.fetch.outputs.HOSTINGER_KNOWN_HOSTS }}
+  HOSTINGER_PORT:
+    value: ${{ steps.fetch.outputs.HOSTINGER_PORT }}
+  HOSTINGER_SSH_KEY:
+    value: ${{ steps.fetch.outputs.HOSTINGER_SSH_KEY }}
+  HOSTINGER_USER:
+    value: ${{ steps.fetch.outputs.HOSTINGER_USER }}
+  TELEGRAM_BOT_TOKEN:
+    value: ${{ steps.fetch.outputs.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID:
+    value: ${{ steps.fetch.outputs.TELEGRAM_CHAT_ID }}
+
+runs:
+  using: composite
+  steps:
+    - id: fetch
+      shell: bash
+      env:
+        INPUT_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        token="${INPUT_TOKEN:-${DOPPLER_TOKEN:-}}"
+        if [ -z "$token" ]; then
+          echo "::error::DOPPLER_TOKEN ausente no ambiente do runner (ver infra/docs: token platform/ci no .env do runner)"
+          exit 1
+        fi
+        # o token vai num arquivo de config do curl, não na linha de comando (ps)
+        cfg="$RUNNER_TEMP/doppler-ci.curl"
+        trap 'rm -f "$cfg"' EXIT
+        printf 'user = "%s:"\n' "$token" > "$cfg"
+        json=$(curl -sS --fail-with-body -K "$cfg" \
+          "https://api.doppler.com/v3/configs/config/secrets/download?format=json")
+        # mascara cada linha de cada valor (chaves SSH têm várias linhas)
+        while IFS= read -r line; do
+          [ -n "$line" ] && echo "::add-mask::$line"
+        done < <(jq -r 'to_entries[] | select(.key | startswith("DOPPLER_") | not) | .value' <<<"$json")
+        while IFS= read -r key; do
+          delim="EOF_$(openssl rand -hex 8)"
+          {
+            echo "$key<<$delim"
+            jq -r --arg k "$key" '.[$k]' <<<"$json"
+            echo "$delim"
+          } >> "$GITHUB_OUTPUT"
+        done < <(jq -r 'keys[] | select(startswith("DOPPLER_") | not)' <<<"$json")
