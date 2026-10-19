@@ -5,8 +5,10 @@ name: Alerta no Telegram
 # `needs: [<jobs do noturno>]` e `if: failure()`.
 #
 # O token do bot e o chat vêm do Doppler (TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no
-# config ci/prd), lidos com o DOPPLER_TOKEN do repositório: no GitHub Free, secret
-# de organização não chega a repositório privado.
+# config platform/ci), lidos com o token read-only que fica no ambiente dos runners
+# self-hosted da org (DOPPLER_TOKEN no .env do runner). Assim o repositório não precisa
+# de secret nenhum (no GitHub Free, secret de organização não chega a repositório privado).
+# O secret DOPPLER_TOKEN ainda é aceito, opcional, só para a transição.
 
 on:
   workflow_call:
@@ -17,7 +19,7 @@ on:
         default: self-hosted
     secrets:
       DOPPLER_TOKEN:
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -27,27 +29,35 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     steps:
-      - name: Credenciais (Doppler ci/prd)
-        id: doppler
-        uses: dopplerhq/secrets-fetch-action@451892f16195f9ac360e1a5bcbf0b5fd0e957534 # v2.0.0
-        with:
-          doppler-token: ${{ secrets.DOPPLER_TOKEN }}
       - name: Mandar a mensagem
         env:
-          BOT_TOKEN: ${{ steps.doppler.outputs.TELEGRAM_BOT_TOKEN }}
-          CHAT_ID: ${{ steps.doppler.outputs.TELEGRAM_CHAT_ID }}
+          SECRET_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           REPO: ${{ github.repository }}
           WORKFLOW: ${{ github.workflow }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          set -euo pipefail
+          token="${SECRET_TOKEN:-${DOPPLER_TOKEN:-}}"
+          if [ -z "$token" ]; then
+            echo "::error::DOPPLER_TOKEN ausente no ambiente do runner (token read-only de platform/ci)"
+            exit 1
+          fi
+          # os tokens vão em arquivos de config do curl, não na linha de comando (ps)
+          dcfg="$RUNNER_TEMP/doppler.curl"
+          cfg="$RUNNER_TEMP/telegram.curl"
+          trap 'rm -f "$dcfg" "$cfg"' EXIT
+          printf 'user = "%s:"\n' "$token" > "$dcfg"
+          json=$(curl -sS --fail-with-body -K "$dcfg" \
+            "https://api.doppler.com/v3/configs/config/secrets/download?format=json")
+          BOT_TOKEN=$(jq -r '.TELEGRAM_BOT_TOKEN // empty' <<<"$json")
+          CHAT_ID=$(jq -r '.TELEGRAM_CHAT_ID // empty' <<<"$json")
+          unset json
+          [ -n "$BOT_TOKEN" ] && echo "::add-mask::$BOT_TOKEN"
           if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
-            echo "::error::TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID ausente no Doppler ci/prd"
+            echo "::error::TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID ausente no Doppler platform/ci"
             exit 1
           fi
           texto=$(printf '🔴 %s: "%s" falhou\n%s' "$REPO" "$WORKFLOW" "$RUN_URL")
-          # o token vai num arquivo de config do curl, não na linha de comando (ps)
-          cfg="$RUNNER_TEMP/telegram.curl"
-          trap 'rm -f "$cfg"' EXIT
           printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$BOT_TOKEN" > "$cfg"
           curl -sS --fail-with-body -K "$cfg" \
             --data-urlencode "chat_id=$CHAT_ID" \
