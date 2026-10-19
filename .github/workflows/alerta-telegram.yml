@@ -1,7 +1,7 @@
 name: Alerta no Telegram
 
 # Avisa no Telegram da plataforma que um workflow falhou. Feito para o noturno
-# (ADR 0006 do deploy-workflows): o app chama este workflow num job com
+# (ADR esteira/0006 do wizortech/platform): o app chama este workflow num job com
 # `needs: [<jobs do noturno>]` e `if: failure()`.
 #
 # O token do bot e o chat vêm do Doppler (TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no
@@ -14,7 +14,7 @@ on:
   workflow_call:
     inputs:
       runner:
-        description: "Label do runner (padrão: self-hosted, qualquer um dos 5 runners ARM64 da org; ADR 0006 do deploy-workflows)"
+        description: "Label do runner (padrão: self-hosted, qualquer runner ARM64 da org; ADR esteira/0006 do wizortech/platform)"
         type: string
         default: self-hosted
     secrets:
