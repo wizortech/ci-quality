@@ -1,7 +1,10 @@
 name: Autoteste
 
-# Roda os workflows deste repositório contra ele mesmo, nos runners padrão
-# (arm64-sp-sem-kubeconfig), antes de mover a tag v1.
+# Roda os workflows deste repositório contra ele mesmo antes de mover a tag v1.
+# Este repositório é público e os runners self-hosted da org não atendem
+# repositório público (não liberar: PR de fork rodaria em máquina com sudo), então
+# o autoteste usa runner hospedado. Os runners arm64-sp-sem-kubeconfig se provam no
+# primeiro PR de app que chama esta versão.
 
 on:
   pull_request:
@@ -13,22 +16,10 @@ permissions:
 jobs:
   gitleaks:
     uses: ./.github/workflows/gitleaks.yml
+    with:
+      runner: ubuntu-24.04-arm
 
   security:
     uses: ./.github/workflows/security.yml
-
-  # Dois jobs ao mesmo tempo para cair nos dois runners do label: gitleaks, Semgrep
-  # e Trivy rodam em container, e o e2e instala o Chromium com sudo.
-  runner:
-    strategy:
-      matrix:
-        n: [1, 2]
-    runs-on: arm64-sp-sem-kubeconfig
-    timeout-minutes: 5
-    steps:
-      - name: Pré-requisitos do runner
-        run: |
-          echo "runner: $RUNNER_NAME"
-          docker version --format 'docker {{.Server.Version}}'
-          sudo -n true && echo "sudo sem senha: ok"
-          df -h "$RUNNER_WORKSPACE" | tail -1
+    with:
+      runner: ubuntu-24.04-arm

@@ -107,9 +107,11 @@ jobs:
 
 ## Self-test
 
-`selftest.yml` runs `gitleaks.yml` and `security.yml` against this repository on every PR and
-checks the `arm64-sp-sem-kubeconfig` runners (Docker, passwordless sudo). Keep it green before
-moving the `v1` tag.
+`selftest.yml` runs `gitleaks.yml` and `security.yml` against this repository on every PR, on a
+GitHub-hosted runner: this repository is public and the organization's self-hosted runners do not
+serve public repositories (and must not: fork PRs would run on machines with sudo). Keep it green
+before moving the `v1` tag; the `arm64-sp-sem-kubeconfig` runners are proven by the first private
+app PR that calls the new version.
 
 ## Pinned Action and Image Versions
 
