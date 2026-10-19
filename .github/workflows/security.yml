@@ -10,6 +10,10 @@ on:
         description: "Se false, Semgrep e Trivy só reportam (gitleaks sempre bloqueia)"
         type: boolean
         default: true
+      block-critical:
+        description: "Bloqueia CVE/config/segredo CRITICAL do Trivy mesmo com enforce=false (e falha se o Trivy não conseguir rodar)"
+        type: boolean
+        default: false
       runner:
         description: "Label do runner (padrão: self-hosted, qualquer um dos 5 runners ARM64 da org; ADR 0006 do deploy-workflows)"
         type: string
@@ -87,10 +91,12 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          docker run --rm -v "$PWD:/src:ro" \
+          # cache no RUNNER_TEMP, com o usuário do runner (arquivo de root ali trava a limpeza)
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" \
             aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
-            fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress \
-            "/src/$WORKING_DIR" | tee "$RUNNER_TEMP/trivy.txt"
+            fs --cache-dir /cache --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress \
+            "/src/$WORKING_DIR" 2>&1 | tee "$RUNNER_TEMP/trivy.txt"
         env:
           WORKING_DIR: ${{ inputs.working-directory }}
       - name: Reportar Trivy
@@ -112,3 +118,26 @@ jobs:
       - name: Bloquear se enforce
         if: steps.scan.outcome == 'failure' && inputs.enforce
         run: exit 1
+      # block-critical: segunda passada só com CRITICAL, sobre o banco já baixado. Bloqueia
+      # também quando o Trivy não roda (ex.: 429 do Maven), para não virar verde sem scan.
+      - name: Bloquear CRITICAL
+        if: inputs.block-critical
+        run: |
+          set -o pipefail
+          if docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" \
+            aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            fs --cache-dir /cache --skip-db-update --skip-java-db-update --scanners vuln,misconfig,secret --severity CRITICAL --exit-code 1 --no-progress \
+            "/src/$WORKING_DIR" 2>&1 | tee "$RUNNER_TEMP/trivy-critical.txt"; then
+            echo "Trivy: nenhum CRITICAL" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "## Trivy: CRITICAL bloqueia (block-critical=true)"
+            echo '```'
+            tail -n 100 "$RUNNER_TEMP/trivy-critical.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Trivy encontrou CRITICAL ou não conseguiu rodar (block-critical=true)"
+          exit 1
+        env:
+          WORKING_DIR: ${{ inputs.working-directory }}
