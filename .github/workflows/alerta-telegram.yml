@@ -1,0 +1,55 @@
+name: Alerta no Telegram
+
+# Avisa no Telegram da plataforma que um workflow falhou. Feito para o noturno
+# (ADR 0006 do deploy-workflows): o app chama este workflow num job com
+# `needs: [<jobs do noturno>]` e `if: failure()`.
+#
+# O token do bot e o chat vêm do Doppler (TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no
+# config ci/prd), lidos com o DOPPLER_TOKEN do repositório: no GitHub Free, secret
+# de organização não chega a repositório privado.
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Label do runner (padrão: arm64-sp-sem-kubeconfig, os runners sem kubeconfig)"
+        type: string
+        default: arm64-sp-sem-kubeconfig
+    secrets:
+      DOPPLER_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  alerta:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 5
+    steps:
+      - name: Credenciais (Doppler ci/prd)
+        id: doppler
+        uses: dopplerhq/secrets-fetch-action@451892f16195f9ac360e1a5bcbf0b5fd0e957534 # v2.0.0
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN }}
+      - name: Mandar a mensagem
+        env:
+          BOT_TOKEN: ${{ steps.doppler.outputs.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ steps.doppler.outputs.TELEGRAM_CHAT_ID }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+            echo "::error::TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID ausente no Doppler ci/prd"
+            exit 1
+          fi
+          texto=$(printf '🔴 %s: "%s" falhou\n%s' "$REPO" "$WORKFLOW" "$RUN_URL")
+          # o token vai num arquivo de config do curl, não na linha de comando (ps)
+          cfg="$RUNNER_TEMP/telegram.curl"
+          trap 'rm -f "$cfg"' EXIT
+          printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$BOT_TOKEN" > "$cfg"
+          curl -sS --fail-with-body -K "$cfg" \
+            --data-urlencode "chat_id=$CHAT_ID" \
+            --data-urlencode "text=$texto" \
+            --data "disable_web_page_preview=true" > /dev/null

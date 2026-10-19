@@ -4,6 +4,10 @@ Reusable GitHub Actions workflows for code quality, security scanning, and build
 
 ## Workflows
 
+All workflows run by default on `arm64-sp-sem-kubeconfig` (the self-hosted runners without
+kubeconfig), leaving the `arm64-sp` runners for build and apply. Override with the `runner` input.
+Where each one runs (PR, deploy, nightly) is decided in `wizortech/deploy-workflows`, ADR 0006.
+
 ### security.yml
 
 Performs security scanning with gitleaks, Semgrep, and Trivy.
@@ -16,6 +20,21 @@ Performs security scanning with gitleaks, Semgrep, and Trivy.
 - **gitleaks** — Detects secrets in committed code (always blocks on findings)
 - **Semgrep CE** — Static analysis for code quality and security patterns
 - **Trivy** — Scans for vulnerabilities, misconfigurations, and secrets in dependencies and configs
+
+### gitleaks.yml
+
+Only the gitleaks job of `security.yml`, for deploy pipelines (Semgrep and Trivy run on PRs and nightly).
+
+**Inputs:** `working-directory` (default `.`), `runner`.
+
+### alerta-telegram.yml
+
+Sends a failure message (repository, workflow and run link) to the platform Telegram bot.
+Meant for nightly workflows, in a job with `needs: [...]` and `if: failure()`.
+
+**Secrets:** `DOPPLER_TOKEN` (required) — read-only service token for Doppler `ci/prd`, which must
+hold `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Organization secrets do not reach private
+repositories on GitHub Free, so each repository has its own.
 
 ### node.yml
 
@@ -65,6 +84,32 @@ jobs:
       java-version: "21"
       command: ./mvnw -B clean verify
 ```
+
+### Nightly example
+
+```yaml
+name: Nightly
+on:
+  schedule:
+    - cron: "0 6 * * *" # 03:00 BRT
+  workflow_dispatch:
+
+jobs:
+  security:
+    uses: wizortech/ci-quality/.github/workflows/security.yml@v1
+  alerta:
+    needs: [security]
+    if: failure()
+    uses: wizortech/ci-quality/.github/workflows/alerta-telegram.yml@v1
+    secrets:
+      DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+```
+
+## Self-test
+
+`selftest.yml` runs `gitleaks.yml` and `security.yml` against this repository on every PR and
+checks the `arm64-sp-sem-kubeconfig` runners (Docker, passwordless sudo). Keep it green before
+moving the `v1` tag.
 
 ## Pinned Action and Image Versions
 
