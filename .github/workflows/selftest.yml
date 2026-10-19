@@ -1,0 +1,25 @@
+name: Autoteste
+
+# Roda os workflows deste repositório contra ele mesmo antes de mover a tag v1.
+# Este repositório é público e os runners self-hosted da org não atendem
+# repositório público (não liberar: PR de fork rodaria em máquina com sudo), então
+# o autoteste usa runner hospedado. Os runners arm64-sp-sem-kubeconfig se provam no
+# primeiro PR de app que chama esta versão.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    uses: ./.github/workflows/gitleaks.yml
+    with:
+      runner: ubuntu-24.04-arm
+
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      runner: ubuntu-24.04-arm

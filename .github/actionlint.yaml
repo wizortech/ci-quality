@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - arm64-sp
+    - arm64-sp-sem-kubeconfig

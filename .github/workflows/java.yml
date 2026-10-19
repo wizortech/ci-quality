@@ -13,9 +13,9 @@ on:
         type: string
         default: "./mvnw -B verify"
       runner:
-        description: "Label do runner (padrão: arm64-sp)"
+        description: "Label do runner (padrão: arm64-sp-sem-kubeconfig, os runners sem kubeconfig; ADR 0006 do deploy-workflows)"
         type: string
-        default: arm64-sp
+        default: arm64-sp-sem-kubeconfig
 
 permissions:
   contents: read
