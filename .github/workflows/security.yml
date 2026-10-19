@@ -93,10 +93,20 @@ jobs:
           set -o pipefail
           # cache no RUNNER_TEMP, com o usuário do runner (arquivo de root ali trava a limpeza)
           mkdir -p "$RUNNER_TEMP/trivy-cache"
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" \
-            aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
-            fs --cache-dir /cache --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress \
-            "/src/$WORKING_DIR" 2>&1 | tee "$RUNNER_TEMP/trivy.txt"
+          trivy() {
+            docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" \
+              aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+              fs --cache-dir /cache --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress \
+              "$@" "/src/$WORKING_DIR"
+          }
+          trivy 2>&1 | tee "$RUNNER_TEMP/trivy.txt" && exit 0
+          # Repo Java: o Maven Central às vezes responde 429 e o Trivy morre sem relatório (e o
+          # job ficava verde com enforce=false). Repete sem rede para o Maven: as dependências
+          # Java saem só do que está declarado no pom, o resto do scan é igual.
+          grep -q '429 Too Many Requests' "$RUNNER_TEMP/trivy.txt" || exit 1
+          echo "::warning::Maven Central respondeu 429; Trivy repetido com --offline-scan"
+          echo "extra=--offline-scan" >> "$GITHUB_OUTPUT"
+          trivy --offline-scan 2>&1 | tee "$RUNNER_TEMP/trivy.txt"
         env:
           WORKING_DIR: ${{ inputs.working-directory }}
       - name: Reportar Trivy
@@ -127,7 +137,7 @@ jobs:
           if docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" \
             aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
             fs --cache-dir /cache --skip-db-update --skip-java-db-update --scanners vuln,misconfig,secret --severity CRITICAL --exit-code 1 --no-progress \
-            "/src/$WORKING_DIR" 2>&1 | tee "$RUNNER_TEMP/trivy-critical.txt"; then
+            ${EXTRA:+"$EXTRA"} "/src/$WORKING_DIR" 2>&1 | tee "$RUNNER_TEMP/trivy-critical.txt"; then
             echo "Trivy: nenhum CRITICAL" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -141,3 +151,4 @@ jobs:
           exit 1
         env:
           WORKING_DIR: ${{ inputs.working-directory }}
+          EXTRA: ${{ steps.scan.outputs.extra }}
