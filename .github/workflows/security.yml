@@ -11,9 +11,9 @@ on:
         type: boolean
         default: true
       runner:
-        description: "Label do runner (padrão: arm64-sp-sem-kubeconfig, os runners sem kubeconfig; ADR 0006 do deploy-workflows)"
+        description: "Label do runner (padrão: self-hosted, qualquer um dos 5 runners ARM64 da org; ADR 0006 do deploy-workflows)"
         type: string
-        default: arm64-sp-sem-kubeconfig
+        default: self-hosted
 
 permissions:
   contents: read
