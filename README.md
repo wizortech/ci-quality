@@ -7,7 +7,7 @@ Reusable GitHub Actions workflows for code quality, security scanning, and build
 All workflows run by default on `self-hosted`, i.e. any of the organization's 5 ARM64 runners
 (`arm64-sp` and `arm64-sp-sem-kubeconfig`). None of them needs kubeconfig or registry credentials, and
 pinning them to the 2 runners without kubeconfig made those the bottleneck while the 3 `arm64-sp` sat
-idle (measured in `wizortech/deploy-workflows`, ADR 0006). Override with the `runner` input.
+idle (measured in `wizortech/platform`, ADR esteira/0006). Override with the `runner` input.
 
 ### security.yml
 

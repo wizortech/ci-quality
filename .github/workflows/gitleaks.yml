@@ -1,6 +1,6 @@
 name: gitleaks
 
-# Só o gitleaks, para o deploy (ADR 0006 do deploy-workflows): Semgrep e Trivy
+# Só o gitleaks, para o deploy (ADR esteira/0006 do wizortech/platform): Semgrep e Trivy
 # rodam no PR e no noturno, via security.yml. O job é o mesmo do security.yml.
 
 on:
@@ -10,7 +10,7 @@ on:
         type: string
         default: "."
       runner:
-        description: "Label do runner (padrão: self-hosted, qualquer um dos 5 runners ARM64 da org; ADR 0006 do deploy-workflows)"
+        description: "Label do runner (padrão: self-hosted, qualquer runner ARM64 da org; ADR esteira/0006 do wizortech/platform)"
         type: string
         default: self-hosted
 
