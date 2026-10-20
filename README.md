@@ -16,6 +16,7 @@ Performs security scanning with gitleaks, Semgrep, and Trivy.
 **Inputs:**
 - `working-directory` (string, default: `.`) — Directory to scan relative to repository root
 - `enforce` (boolean, default: `true`) — If false, Semgrep and Trivy only report; gitleaks always blocks
+- A `.trivyignore` at `working-directory` is passed to Trivy (`--ignorefile`). Use it only for findings with no fix or false positives, with the reason as a comment
 - `block-critical` (boolean, default: `false`) — Blocks on any Trivy CRITICAL finding (vuln, misconfig, secret) even with `enforce: false`, and fails if Trivy cannot run (e.g. Maven 429). Meant for repos whose CRITICAL baseline is zero while HIGH/Semgrep are still being cleaned up
 
 **Scanners:**
