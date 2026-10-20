@@ -94,11 +94,15 @@ jobs:
           # cache no RUNNER_TEMP, com o usuário do runner (arquivo de root ali trava a limpeza)
           mkdir -p "$RUNNER_TEMP/trivy-cache"
           # .trivyignore do repo (achado sem correção ou falso positivo, com justificativa no arquivo)
+          # .trivyignore.yaml (aceita paths por achado) tem preferência sobre o .trivyignore simples.
           ign=()
-          if [ -f "$WORKING_DIR/.trivyignore" ]; then
-            ign=(--ignorefile "/src/$WORKING_DIR/.trivyignore")
-            echo "ignorefile=--ignorefile=/src/$WORKING_DIR/.trivyignore" >> "$GITHUB_OUTPUT"
-          fi
+          for f in .trivyignore.yaml .trivyignore; do
+            if [ -f "$WORKING_DIR/$f" ]; then
+              ign=(--ignorefile "/src/$WORKING_DIR/$f")
+              echo "ignorefile=--ignorefile=/src/$WORKING_DIR/$f" >> "$GITHUB_OUTPUT"
+              break
+            fi
+          done
           trivy() {
             docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$RUNNER_TEMP/trivy-cache:/cache" \
               aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
